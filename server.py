@@ -12,11 +12,11 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 @app.errorhandler(Exception)
-def page_not_found(e):
+def handle_error(e):
     code = 500
     if isinstance(e, HTTPException):
         code = e.code
-    return jsonify(code=code, msg=str(e)), 404
+    return jsonify(code=code, msg=str(e)), code
 
 
 def validate_app_url() -> bool:
