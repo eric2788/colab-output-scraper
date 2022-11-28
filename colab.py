@@ -7,7 +7,7 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions
-from selenium.common.exceptions import TimeoutException, NoAlertPresentException, JavascriptException
+from selenium.common.exceptions import TimeoutException, NoAlertPresentException, JavascriptException, InvalidSessionIdException, WebDriverException
 import pathlib
 from time import sleep
 import regex, json, os
@@ -46,7 +46,16 @@ os.makedirs(DATA_DIR, exist_ok=True)
 # copy from net
 def run_colab(gmail: str, password: str) -> None:
 
-    driver.get('https://colab.research.google.com')
+    try:
+        driver.get('https://colab.research.google.com')
+    except {InvalidSessionIdException, WebDriverException} as e:   # session expired
+        logger.warning(f'error while opening page: {e}')
+        # reassign driver
+        global driver
+        driver = uc.Chrome(desired_capabilities=caps, options=options, driver_executable_path=driver_path)
+        driver.implicitly_wait(30)
+        raise RuntimeError(f'打開colab網頁失敗: {e}, 請重試一次')
+    
     load_cookie()
 
     force_refresh_webpage(NOTEBOOK_URL)
@@ -200,12 +209,12 @@ def login_google_acc(gmail: str, password: str) -> None:
                     By.XPATH, '//*[@id="yDmH0d"]/c-wiz/div/div[2]/div/div[1]/div/form/span/div[1]/div[2]/div[1]'
                 )
             )
-            raise RuntimeError(f"Google账号{gmail}的密码填写有误！")
+            raise RuntimeError(f"Google账号 {gmail} 的密码填写有误！")
         except TimeoutException:
             logger.info(f"成功登入Google账号：{gmail}！")
 
     except TimeoutException:
-        raise RuntimeError(f"登陆Google账号{gmail}发生超时，请检查网络和账密！")
+        raise RuntimeError(f"登陆Google账号 {gmail} 发生超时，请检查网络和账密！")
 
     # In case of Google asking you to complete your account info
     try:
