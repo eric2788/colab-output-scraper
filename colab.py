@@ -17,6 +17,8 @@ import logging
 
 APP_URL = ""
 
+logger = logging.getLogger('colab')
+
 url_regexp = regex.compile('Running\son\spublic\sURL:\s(https:\/\/[a-f0-9]+\.gradio\.app)', regex.S | regex.M)
 
 script_directory = pathlib.Path().absolute()
@@ -28,12 +30,14 @@ options = Options()
 options.add_argument("--disable-extensions")
 options.add_argument("--disable-gpu")
 
+driver_path = None
 if platform.startswith("linux"):
+    logger.info('using linux os')
+    driver_path = '/usr/bin/chromedriver'
     options.add_argument("--no-sandbox") # linux only
     options.add_argument("--headless")
 
-
-driver: Chrome = uc.Chrome(desired_capabilities=caps, options=options)
+driver: Chrome = uc.Chrome(desired_capabilities=caps, options=options, driver_executable_path=driver_path)
 driver.implicitly_wait(30)
 #driver = webdriver.Chrome('./chromedriver', desired_capabilities=caps, options=options)
 
@@ -62,11 +66,11 @@ def run_colab(gmail: str, password: str) -> None:
             f"当前账号：{gmail}"
         )
 
-    logging.info('successfully going to colab page...')
+    logger.info('successfully going to colab page...')
 
     running_status = driver.find_element(By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]').get_attribute('class')
     if "running" in running_status:
-        logging.info("interrupt previous execution...")
+        logger.info("interrupt previous execution...")
         # interrupt previous execution
         driver.find_element(By.XPATH, '/html/body').send_keys(Keys.CONTROL + 'm')
         sleep(0.3)
@@ -78,13 +82,13 @@ def run_colab(gmail: str, password: str) -> None:
                 (By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]//pre'),
                 'KeyboardInterrupt'
             ))
-            logging.info('successfully interrupted previous execution.')
+            logger.info('successfully interrupted previous execution.')
         except TimeoutException:
-            logging.warning('cannot interrupt current exception.')
+            logger.warning('cannot interrupt current exception.')
 
         sleep(3)
 
-    logging.info('removing previous output...')
+    logger.info('removing previous output...')
 
     driver.execute_script(f"""
         document.querySelector('#{CELL_OUTPUT_ID}  iron-icon[command=clear-focused-or-selected-outputs]').click()
@@ -92,7 +96,7 @@ def run_colab(gmail: str, password: str) -> None:
 
     sleep(2)
 
-    logging.info('execute completed. trying to run all cells.')
+    logger.info('execute completed. trying to run all cells.')
 
     # run all cells
     driver.find_element(By.XPATH, '/html/body').send_keys(Keys.CONTROL + Keys.F9)
@@ -120,7 +124,7 @@ def run_colab(gmail: str, password: str) -> None:
     if len(list) == 0:
         raise RuntimeError(f"cannot find url by pattern {url_regexp.pattern}")
     
-    logging.info(f'the ;atest url link is {list[0]}')
+    logger.info(f'the latest url link is {list[0]}')
     
     global APP_URL
     APP_URL = list[0]
@@ -198,7 +202,7 @@ def login_google_acc(gmail: str, password: str) -> None:
             )
             raise RuntimeError(f"Google账号{gmail}的密码填写有误！")
         except TimeoutException:
-            logging.info(f"成功登入Google账号：{gmail}！")
+            logger.info(f"成功登入Google账号：{gmail}！")
 
     except TimeoutException:
         raise RuntimeError(f"登陆Google账号{gmail}发生超时，请检查网络和账密！")
