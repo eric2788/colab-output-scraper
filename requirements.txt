@@ -4,5 +4,4 @@ regex
 python-dotenv
 flask
 waitress
-xvfbwrapper
 PyVirtualDisplay

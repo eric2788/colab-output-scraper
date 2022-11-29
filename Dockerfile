@@ -6,6 +6,7 @@ RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" > /etc/apk/reposi
 RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories
 
 RUN apk update && apk add \
+    xvfb \
     chromium \ 
     chromium-chromedriver 
 
