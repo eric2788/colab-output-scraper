@@ -6,7 +6,7 @@ import requests
 import logging
 from constrants import EMAIL, PASSWORD, DEBUG_MODE
 from werkzeug.exceptions import HTTPException
-import atexit
+import signal
 from threading import Lock
 
 if DEBUG_MODE:
@@ -83,7 +83,7 @@ if __name__ == '__main__':
 
     logger.info('starting web server...')
 
-    atexit.register(colab.quit_driver)
+    signal.signal(signal.SIGTERM, colab.quit_driver)
 
     args = {
         'host': '0.0.0.0',
