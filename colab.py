@@ -130,6 +130,7 @@ def run_colab(gmail: str, password: str) -> None:
             raise e
     finally:
         driver.save_screenshot(f'{DATA_DIR}/checkpoint.png')
+        logger.info('成功保存上一个检查点的截图')
 
 def login_google_acc(gmail: str, password: str) -> None:
     try:
