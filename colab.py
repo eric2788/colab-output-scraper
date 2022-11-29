@@ -1,12 +1,12 @@
 import undetected_chromedriver.v2 as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-
+from pyvirtualdisplay import Display
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions
 from selenium.common.exceptions import TimeoutException, NoAlertPresentException, JavascriptException, WebDriverException
 from time import sleep
-import regex, json, os
+import regex, json, os, sys
 from constrants import *
 import logging
 from webdriver import init_driver
@@ -17,14 +17,20 @@ logger = logging.getLogger('colab')
 
 url_regexp = regex.compile(r'Running\son\spublic\sURL:\s(https:\/\/[a-f0-9]+\.gradio\.app)', regex.S | regex.M)
 
+display: Display = None
+
+if sys.platform.startswith('linux'):
+    # use this to replace headless
+    display = Display(visible=0, size=(800, 600))
+    display.start()
+
 driver = init_driver()
 
 os.makedirs(DATA_DIR, exist_ok=True)
 
-
-
 # copy from net
 def run_colab(gmail: str, password: str) -> None:
+    global driver
     try:
 
         logger.info('开始运行colab....')
@@ -118,7 +124,6 @@ def run_colab(gmail: str, password: str) -> None:
         if "session deleted" in e or "page crash" in e:
             logger.warn(f'运行chromedriver报错: {e}')
             logger.warn('正在重新初始化chromedriver...')
-            global driver
             driver = init_driver()
         else:
             raise e
@@ -230,7 +235,6 @@ def wait_and_click_element(by: str, value: str) -> any:
     WebDriverWait(driver, 3).until(
         expected_conditions.element_to_be_clickable((by, value))
     )
-    #element.click()
     driver.execute_script("arguments[0].click();", element)
 
     sleep(0.1)
@@ -268,15 +272,12 @@ def load_cookie():
     except Exception as  e:
         logger.warning(f'cookie loading failed: {e}')
 
-
 def quit_driver():
     logger.info('closing server... please wait')
     save_cookie()
     driver.quit()
     if display:
         display.stop()
-
-
 
 if __name__ == '__main__':
     run_colab(EMAIL, PASSWORD)
