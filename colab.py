@@ -21,7 +21,7 @@ display: Display = None
 
 if sys.platform.startswith('linux'):
     # use this to replace headless
-    display = Display(visible=0, size=(800, 600))
+    display = Display(visible=0, size=(1280, 720))
     display.start()
 
 driver = init_driver()
@@ -102,7 +102,7 @@ def run_colab(gmail: str, password: str) -> None:
         try:
             WebDriverWait(driver, 20).until(expected_conditions.frameToBeAvailableAndSwitchToIt((By.XPATH, "//iframe[starts-with(@name, 'a-') and starts-with(@src, 'https://www.google.com/recaptcha')]"))); 
             logger.info('发现 Google reCAPTCHA，尝试跳过...')
-            sleep(1)
+            sleep(3)
             wait_and_click_element(
                 by=By.CSS_SELECTOR, 
                 value="div.recaptcha-checkbox-checkmark"
@@ -261,6 +261,7 @@ def wait_and_click_element(by: str, value: str) -> any:
     element = WebDriverWait(driver, 5).until(
         lambda t_driver: t_driver.find_element(by, value)
     )
+    sleep(3)
     WebDriverWait(driver, 3).until(
         expected_conditions.element_to_be_clickable((by, value))
     )
