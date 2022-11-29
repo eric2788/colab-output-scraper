@@ -122,7 +122,7 @@ def run_colab(gmail: str, password: str) -> None:
 
         keep_page_active()
     except WebDriverException as e:
-        if "session deleted" in e or "page crash" in e:
+        if "session deleted" in str(e.msg) or "page crash" in str(e.msg):
             logger.warn(f'运行chromedriver报错: {e}')
             logger.warn('正在重新初始化chromedriver...')
             driver = init_driver()
