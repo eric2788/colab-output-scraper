@@ -14,6 +14,6 @@ PASSWORD = os.getenv('GMAIL_PASSWORD')
 DATA_DIR = 'profile'
 COOKIE_PATH = f'{DATA_DIR}/cookies.json'
 
-DEBUG_MODE = os.getenv('DEBUG', 'false') == 'true'
+DEBUG_MODE = os.getenv('DEBUG', 'true') == 'true'
 
 CELL_OUTPUT_ID = os.getenv('CELL_OUTPUT_ID', 'cell-wSwVGakT24XG')

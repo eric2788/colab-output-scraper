@@ -17,6 +17,8 @@ COPY requirements.txt .
 
 RUN pip install -r requirements.txt
 
+ENV DEBUG=false
+
 EXPOSE 8080
 
 VOLUME /profile

@@ -1,19 +1,24 @@
 # create flask web app to get the APP_URL from colab.py
 import colab
 from flask import Flask, jsonify
+from waitress import serve
 import requests
 import logging
 from constrants import EMAIL, PASSWORD, DEBUG_MODE
 from werkzeug.exceptions import HTTPException
 import atexit
+from threading import Lock
 
-app = Flask(__name__)
 if DEBUG_MODE:
     logging.basicConfig(level=logging.DEBUG)
 else:
     logging.basicConfig(level=logging.INFO)
 
-logger =logging.getLogger('server')
+app = Flask(__name__)
+
+logger = logging.getLogger('server')
+
+colab_lock = Lock()
 
 @app.errorhandler(Exception)
 def handle_error(e):
@@ -38,10 +43,20 @@ def validate_app_url() -> bool:
         logging.warning(e)
         return False
 
-
 @app.route('/launch_colab', methods=['POST'])
 def launch_colab():
-    colab.run_colab(EMAIL, PASSWORD)
+
+    if colab_lock.locked():
+        return jsonify({
+            'code': 400,
+            'msg': 'colab is launching, please wait until finish'
+        }), 400
+
+    colab_lock.acquire()
+    try:
+        colab.run_colab(EMAIL, PASSWORD) # 5 ~ 10 mins
+    finally:
+        colab_lock.release()
     return jsonify({
         'code': 200,
         'msg': 'success',
@@ -65,5 +80,17 @@ def get_url():
 
 
 if __name__ == '__main__':
+
+    logger.info('starting web server...')
+
     atexit.register(colab.quit_driver)
-    app.run(host='0.0.0.0', port=8080, debug=DEBUG_MODE)
+
+    args = {
+        'host': '0.0.0.0',
+        'port': 8080,
+    }
+
+    if DEBUG_MODE:
+        app.run(**args, debug=DEBUG_MODE, use_reloader=False)
+    else:
+        serve(app, **args)

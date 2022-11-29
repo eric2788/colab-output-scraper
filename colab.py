@@ -14,6 +14,7 @@ import regex, json, os
 from sys import platform
 from constrants import *
 import logging
+from pyvirtualdisplay import Display
 
 APP_URL = ""
 
@@ -27,15 +28,19 @@ caps = DesiredCapabilities.CHROME.copy()
 caps["goog:loggingPrefs"] = {"performance": "ALL"}  # enable performance logs
 
 options = Options()
-options.add_argument("--disable-extensions")
-options.add_argument("--disable-gpu")
+#options.add_argument("--disable-extensions")
+#options.add_argument("--disable-gpu")
 
 driver_path = None
+display: Display = None
+
 if platform.startswith("linux"):
     logger.info('using linux os')
     driver_path = '/usr/bin/chromedriver'
     options.add_argument("--no-sandbox") # linux only
-    options.add_argument("--headless")
+    # use this to replace headless
+    display = Display(visible=0, size=(800, 600))
+    display.start()
 
 driver: Chrome = uc.Chrome(desired_capabilities=caps, options=options, driver_executable_path=driver_path)
 driver.implicitly_wait(30)
@@ -45,13 +50,12 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 # copy from net
 def run_colab(gmail: str, password: str) -> None:
-
+    global driver
     try:
         driver.get('https://colab.research.google.com')
     except {InvalidSessionIdException, WebDriverException} as e:   # session expired
         logger.warning(f'error while opening page: {e}')
         # reassign driver
-        global driver
         driver = uc.Chrome(desired_capabilities=caps, options=options, driver_executable_path=driver_path)
         driver.implicitly_wait(30)
         raise RuntimeError(f'打開colab網頁失敗: {e}, 請重試一次')
@@ -214,6 +218,7 @@ def login_google_acc(gmail: str, password: str) -> None:
             logger.info(f"成功登入Google账号：{gmail}！")
 
     except TimeoutException:
+        driver.save_screenshot('profile/timeout.png')
         raise RuntimeError(f"登陆Google账号 {gmail} 发生超时，请检查网络和账密！")
 
     # In case of Google asking you to complete your account info
@@ -258,8 +263,14 @@ def keep_page_active():
     """) 
 
 def save_cookie():
-    with open(COOKIE_PATH, 'w') as filehandler:
-        json.dump(driver.get_cookies(), filehandler)
+    try:
+        cookies = driver.get_cookies()
+        if not cookies:
+            return
+        with open(COOKIE_PATH, 'w') as filehandler:
+            json.dump(cookies, filehandler)
+    except Exception as e:
+        logger.warning(f'cookie saving failed: {e}')
 
 def load_cookie():
     try:
@@ -267,13 +278,16 @@ def load_cookie():
             cookies = json.load(cookiesfile)
         for cookie in cookies:
             driver.add_cookie(cookie)
-    except FileNotFoundError:
-        pass
+    except Exception as  e:
+        logger.warning(f'cookie loading failed: {e}')
 
 
 def quit_driver():
+    logger.info('closing server... please wait')
     save_cookie()
     driver.quit()
+    if display:
+        display.stop()
 
 
 
