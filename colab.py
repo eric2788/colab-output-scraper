@@ -126,6 +126,7 @@ def run_colab(gmail: str, password: str) -> None:
             logger.warn(f'运行chromedriver报错: {e}')
             logger.warn('正在重新初始化chromedriver...')
             driver = init_driver()
+            raise RuntimeError(f'运行colab时报错: {e}, 请重试')
         else:
             raise e
     finally:
@@ -136,6 +137,7 @@ def login_google_acc(gmail: str, password: str) -> None:
     try:
         # No account logged in yet
         try:
+            logger.info('正在寻找登入按钮...')
             # click "Sign in"
             login = WebDriverWait(driver, 5).until(
                 lambda t_driver: t_driver.find_element(By.XPATH, '//*[@id="gb"]/div/div/a')
@@ -145,23 +147,30 @@ def login_google_acc(gmail: str, password: str) -> None:
         # Already logged in
         except TimeoutException:
 
-            profile = driver.find_element(By.XPATH, '//*[@class="gb_A gb_Ma gb_f"]').get_attribute('aria-label')
+            logger.info('找不到登入按钮,正在查找已登入的账户资讯...')
 
-            logger.info(f'目前登入账户: {profile}')
+            profile = driver.find_element(By.XPATH, '//*[@class="gb_A gb_Ma gb_f"]')
 
-            # logged in with correct account
-            if gmail in profile:
-                logger.info('已经登入正确账户，无需再次登入')
-                return
-
+            if profile:
+                login_info = profile.get_attribute('aria-label')
+                logger.info(f'目前登入账户: {login_info}')
+                # logged in with correct account
+                if gmail in login_info:
+                    logger.info('已经登入正确账户，无需再次登入')
+                    return
+            else:
+                logger.info('找不到登入账户资讯')
 
             # logout current account
-            logger.info('登出当前账户...')
+            logger.info('正在寻找登出按钮...')
             logout = WebDriverWait(driver, 5).until(
                 lambda t_driver: t_driver.find_element(
                     By.XPATH, '//*[@id="gb"]/div/div[1]/div[2]/div/a'
                 )
             )
+
+            logger.info('正在登出账户...')
+
             driver.get(logout.get_attribute('href'))
             driver.find_element(By.XPATH, '//*[@id="signout"]').click()
 

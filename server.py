@@ -26,7 +26,7 @@ def handle_error(e):
     logging.error(f'resolved error: {e}')
     if isinstance(e, HTTPException):
         code = e.code
-    else:
+    elif not isinstance(e, RuntimeError):
         logging.exception(e)
     return jsonify(code=code, msg=str(e)), code
 
