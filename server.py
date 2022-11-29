@@ -41,7 +41,7 @@ def validate_app_url() -> bool:
 
 @app.route('/launch_colab', methods=['POST'])
 def launch_colab():
-    colab.run_colab(EMAIL, PASSWORD)
+    colab.run_colab(EMAIL, PASSWORD) # 5 ~ 10 mins
     return jsonify({
         'code': 200,
         'msg': 'success',
