@@ -107,7 +107,17 @@ def run_colab(gmail: str, password: str) -> None:
                 'Running on public URL:'
             ))
         except TimeoutException:
-            raise RuntimeError('运行逾时: 无法在output中找到相关字眼，可能是Colab运行失败')
+            try:
+                output = driver.find_element(By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]//pre').text
+                if not output:
+                    raise RuntimeError('colab 运行超时，但是没有输出')
+                else:
+                    logger.warning(f'colab 运行超时，输出内容如下:')
+                    for output in output.split('\n'):
+                        logger.warning(output)
+                    raise RuntimeError('运行逾时: 无法在output中找到相关字眼，可能是Colab运行失败')
+            except NoSuchElementException:
+                raise RuntimeError(f'运行逾时, 且找不到输出内容的元素')
 
         output = driver.find_element(By.XPATH, f"//*[@id='{CELL_OUTPUT_ID}']//pre")
 
