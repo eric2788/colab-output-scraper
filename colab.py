@@ -26,11 +26,17 @@ os.makedirs(DATA_DIR, exist_ok=True)
 # copy from net
 def run_colab(gmail: str, password: str) -> None:
     try:
+
+        logger.info('开始运行colab....')
+
         driver.get('https://colab.research.google.com')
         load_cookie()
 
+        logger.info('正在刷新 colab notebook 页面...')
         force_refresh_webpage(NOTEBOOK_URL)
+        logger.info('刷新完毕')
 
+        logger.info('开始登入 google 账号...')
         login_google_acc(gmail, password)
 
         sleep(3)
@@ -38,19 +44,16 @@ def run_colab(gmail: str, password: str) -> None:
             wait = WebDriverWait(driver, 30)
             wait.until(expected_conditions.visibility_of(driver.find_element(By.ID, CELL_OUTPUT_ID)))
         except JavascriptException:
-            # failed to fill input box
-            # mostly, this happens when Google is asking you to do extra verification i.e. phone number
-            # Colab page won't be loaded normally, then result in this error.
             raise RuntimeError(
-                f"Google账密验证成功，但Colab页面没有被成功加载。可能是因为Google正在要求账号进行额外验证或账号不再可用！"
+                f"Google账密验证成功，但找不到 ID 为 {CELL_OUTPUT_ID} 的储存格，可能是Colab页面没有被成功加载，又或者填写有误"
                 f"当前账号：{gmail}"
             )
 
-        logger.info('successfully going to colab page...')
+        logger.info('成功跳转到 colab 页面')
 
         running_status = driver.find_element(By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]').get_attribute('class')
         if "running" in running_status:
-            logger.info("interrupt previous execution...")
+            logger.info("发现有储存格正在运行，尝试终止...")
             # interrupt previous execution
             driver.find_element(By.XPATH, '/html/body').send_keys(Keys.CONTROL + 'm')
             sleep(0.3)
@@ -62,13 +65,13 @@ def run_colab(gmail: str, password: str) -> None:
                     (By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]//pre'),
                     'KeyboardInterrupt'
                 ))
-                logger.info('successfully interrupted previous execution.')
+                logger.info('成功终止储存格运行')
             except TimeoutException:
-                logger.warning('cannot interrupt current exception.')
+                logger.warning('储存格终止失败，可能是储存格运行时间过长，或者储存格运行已经结束')
 
             sleep(3)
 
-        logger.info('removing previous output...')
+        logger.info('正在删除旧的输出...')
 
         driver.execute_script(f"""
             document.querySelector('#{CELL_OUTPUT_ID}  iron-icon[command=clear-focused-or-selected-outputs]').click()
@@ -76,7 +79,7 @@ def run_colab(gmail: str, password: str) -> None:
 
         sleep(2)
 
-        logger.info('execute completed. trying to run all cells.')
+        logger.info('删除完毕，开始运行所有储存格...')
 
         # run all cells
         driver.find_element(By.XPATH, '/html/body').send_keys(Keys.CONTROL + Keys.F9)
@@ -96,15 +99,15 @@ def run_colab(gmail: str, password: str) -> None:
                 'Running on public URL:'
             ))
         except TimeoutException:
-            raise RuntimeError('cannot execute the python program')
+            raise RuntimeError('无法在output中找到相关字眼，可能是Colab运行失败')
 
         output = driver.find_element(By.XPATH, f"//*[@id='{CELL_OUTPUT_ID}']//pre")
 
         list = url_regexp.findall(output.text)
         if len(list) == 0:
-            raise RuntimeError(f"cannot find url by pattern {url_regexp.pattern}")
+            raise RuntimeError(f"无法透过 {url_regexp.pattern} 找到地址，可能是Colab运行失败或pattern有误")
         
-        logger.info(f'the latest url link is {list[0]}')
+        logger.info(f'执行成功。最新的链接地址为 {list[0]}')
         
         global APP_URL
         APP_URL = list[0]
@@ -113,8 +116,8 @@ def run_colab(gmail: str, password: str) -> None:
         save_cookie()
     except WebDriverException as e:
         if "session deleted" in e or "page crash" in e:
-            logger.warn(f'error while running driver: {e}')
-            logger.warn('reinititalize driver...')
+            logger.warn(f'运行chromedriver报错: {e}')
+            logger.warn('正在重新初始化chromedriver...')
             global driver
             driver = init_driver()
         else:
@@ -135,13 +138,16 @@ def login_google_acc(gmail: str, password: str) -> None:
 
             profile = driver.find_element(By.XPATH, '//*[@class="gb_A gb_Ma gb_f"]').get_attribute('aria-label')
 
-            print(f'currently logged in: {profile}')
+            logger.info(f'目前登入账户: {profile}')
 
             # logged in with correct account
             if gmail in profile:
+                logger.info('已经登入正确账户，无需再次登入')
                 return
 
+
             # logout current account
+            logger.info('登出当前账户...')
             logout = WebDriverWait(driver, 5).until(
                 lambda t_driver: t_driver.find_element(
                     By.XPATH, '//*[@id="gb"]/div/div[1]/div[2]/div/a'
@@ -151,6 +157,7 @@ def login_google_acc(gmail: str, password: str) -> None:
             driver.find_element(By.XPATH, '//*[@id="signout"]').click()
 
             # click "Sign in"
+            logger.info('正在重新登入...')
             login = WebDriverWait(driver, 5).until(
                 lambda t_driver: t_driver.find_element(By.XPATH, '//*[@id="gb"]/div/div/a')
             )
@@ -173,6 +180,7 @@ def login_google_acc(gmail: str, password: str) -> None:
         driver.execute_script("arguments[0].click();", gmail_input)
         sleep(0.5)
         gmail_input.send_keys(gmail, Keys.ENTER)
+        logger.info('填写电邮成功')
 
         pwd_input = WebDriverWait(driver, 5).until(expected_conditions.element_to_be_clickable(
             (By.XPATH, '//*[@id="password"]/div[1]/div/div[1]/input')
@@ -180,6 +188,7 @@ def login_google_acc(gmail: str, password: str) -> None:
         driver.execute_script("arguments[0].click();", pwd_input)
         sleep(0.5)
         pwd_input.send_keys(password, Keys.ENTER)
+        logger.info('填写密码成功')
 
         # check if the password is incorrect
         try:
@@ -190,11 +199,11 @@ def login_google_acc(gmail: str, password: str) -> None:
             )
             raise RuntimeError(f"Google账号 {gmail} 的密码填写有误！")
         except TimeoutException:
-            logger.info(f"成功登入Google账号：{gmail}！")
+            logger.info(f"成功登入Google账号：{gmail}")
 
     except TimeoutException:
         driver.save_screenshot('profile/timeout.png')
-        raise RuntimeError(f"登陆Google账号 {gmail} 发生超时，请检查网络和账密！")
+        raise RuntimeError(f"登陆Google账号 {gmail} 发生超时，请检查网络和账密")
 
     # In case of Google asking you to complete your account info
     try:
@@ -236,6 +245,7 @@ def keep_page_active():
         }
         setInterval(ConnectButton,60000);
     """) 
+    logger.info('成功执行保持页面连接的JS代码')
 
 def save_cookie():
     try:
@@ -244,6 +254,7 @@ def save_cookie():
             return
         with open(COOKIE_PATH, 'w') as filehandler:
             json.dump(cookies, filehandler)
+            logger.info('成功保存Cookie')
     except Exception as e:
         logger.warning(f'cookie saving failed: {e}')
 
@@ -253,6 +264,7 @@ def load_cookie():
             cookies = json.load(cookiesfile)
         for cookie in cookies:
             driver.add_cookie(cookie)
+        logger.info('成功加载Cookie')
     except Exception as  e:
         logger.warning(f'cookie loading failed: {e}')
 
