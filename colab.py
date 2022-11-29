@@ -127,6 +127,8 @@ def run_colab(gmail: str, password: str) -> None:
             driver = init_driver()
         else:
             raise e
+    finally:
+        driver.save_screenshot(f'{DATA_DIR}/checkpoint.png')
 
 def login_google_acc(gmail: str, password: str) -> None:
     try:
@@ -260,7 +262,7 @@ def save_cookie():
             json.dump(cookies, filehandler)
             logger.info('成功保存Cookie')
     except Exception as e:
-        logger.warning(f'cookie saving failed: {e}')
+        logger.warning(f'保存Cookie失败: {e}')
 
 def load_cookie():
     try:
@@ -270,7 +272,7 @@ def load_cookie():
             driver.add_cookie(cookie)
         logger.info('成功加载Cookie')
     except Exception as  e:
-        logger.warning(f'cookie loading failed: {e}')
+        logger.warning(f'加载Cookie失败: {e}')
 
 def quit_driver():
     logger.info('closing server... please wait')
