@@ -20,7 +20,7 @@ APP_URL = ""
 
 logger = logging.getLogger('colab')
 
-url_regexp = regex.compile('Running\son\spublic\sURL:\s(https:\/\/[a-f0-9]+\.gradio\.app)', regex.S | regex.M)
+url_regexp = regex.compile(r'Running\son\spublic\sURL:\s(https:\/\/[a-f0-9]+\.gradio\.app)', regex.S | regex.M)
 
 script_directory = pathlib.Path().absolute()
 
@@ -28,8 +28,8 @@ caps = DesiredCapabilities.CHROME.copy()
 caps["goog:loggingPrefs"] = {"performance": "ALL"}  # enable performance logs
 
 options = Options()
-#options.add_argument("--disable-extensions")
-#options.add_argument("--disable-gpu")
+options.add_argument("--disable-extensions")
+options.add_argument("--disable-gpu")
 
 driver_path = None
 display: Display = None
