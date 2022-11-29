@@ -3,3 +3,5 @@ undetected_chromedriver
 regex
 python-dotenv
 flask
+waitress
+PyVirtualDisplay
