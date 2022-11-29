@@ -95,17 +95,19 @@ def run_colab(gmail: str, password: str) -> None:
             wait_and_click_element(
                 by=By.XPATH, value='/html/body/colab-dialog/paper-dialog/div[2]/paper-button[2]'
             )
+            logger.info('colab 出现确认运行页面，已成功点击确认')
         except TimeoutException:
             pass
 
         try:
+            logger.info('正在运行并等待相关字眼出现...')
             wait = WebDriverWait(driver, 15 * 60)
             wait.until(expected_conditions.text_to_be_present_in_element(
                 (By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]//pre'),
                 'Running on public URL:'
             ))
         except TimeoutException:
-            raise RuntimeError('无法在output中找到相关字眼，可能是Colab运行失败')
+            raise RuntimeError('运行逾时: 无法在output中找到相关字眼，可能是Colab运行失败')
 
         output = driver.find_element(By.XPATH, f"//*[@id='{CELL_OUTPUT_ID}']//pre")
 
@@ -119,7 +121,6 @@ def run_colab(gmail: str, password: str) -> None:
         APP_URL = list[0]
 
         keep_page_active()
-        save_cookie()
     except WebDriverException as e:
         if "session deleted" in e or "page crash" in e:
             logger.warn(f'运行chromedriver报错: {e}')
@@ -207,6 +208,7 @@ def login_google_acc(gmail: str, password: str) -> None:
             raise RuntimeError(f"Google账号 {gmail} 的密码填写有误！")
         except TimeoutException:
             logger.info(f"成功登入Google账号：{gmail}")
+            save_cookie()
 
     except TimeoutException:
         driver.save_screenshot('profile/timeout.png')
@@ -275,7 +277,7 @@ def load_cookie():
         logger.warning(f'加载Cookie失败: {e}')
 
 def quit_driver():
-    logger.info('closing server... please wait')
+    logger.info('正在关闭chromedriver...')
     save_cookie()
     driver.quit()
     if display:
