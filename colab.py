@@ -100,6 +100,18 @@ def run_colab(gmail: str, password: str) -> None:
             pass
 
         try:
+            WebDriverWait(driver, 20).until(expected_conditions.frameToBeAvailableAndSwitchToIt((By.XPATH, "//iframe[starts-with(@name, 'a-') and starts-with(@src, 'https://www.google.com/recaptcha')]"))); 
+            logger.info('发现 Google reCAPTCHA，尝试跳过...')
+            sleep(1)
+            wait_and_click_element(
+                by=By.CSS_SELECTOR, 
+                value="div.recaptcha-checkbox-checkmark"
+            )
+            logger.info('跳过成功')
+        except TimeoutException:
+            pass
+
+        try:
             logger.info('正在运行并等待相关字眼出现...')
             wait = WebDriverWait(driver, 15 * 60)
             wait.until(expected_conditions.text_to_be_present_in_element(
@@ -110,7 +122,7 @@ def run_colab(gmail: str, password: str) -> None:
             try:
                 output = driver.find_element(By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]//pre').text
                 if not output:
-                    raise RuntimeError('colab 运行超时，但是没有输出')
+                    raise RuntimeError('colab 运行超时，但是没有输出，可能被机器人挡住？')
                 else:
                     logger.warning(f'colab 运行超时，输出内容如下:')
                     for output in output.split('\n'):
