@@ -4,7 +4,7 @@ from selenium.webdriver.common.keys import Keys
 from pyvirtualdisplay import Display
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions
-from selenium.common.exceptions import TimeoutException, NoAlertPresentException, JavascriptException, WebDriverException
+from selenium.common.exceptions import TimeoutException, NoAlertPresentException, JavascriptException, WebDriverException, NoSuchElementException
 from time import sleep
 import regex, json, os, sys
 from constrants import *
@@ -146,31 +146,24 @@ def login_google_acc(gmail: str, password: str) -> None:
 
         # Already logged in
         except TimeoutException:
-
-            logger.info('找不到登入按钮,正在查找已登入的账户资讯...')
-
-            profile = driver.find_element(By.XPATH, '//*[@class="gb_A gb_Ma gb_f"]')
-
-            if profile:
-                login_info = profile.get_attribute('aria-label')
-                logger.info(f'目前登入账户: {login_info}')
+            logger.info('找不到登入按钮，正在寻找目前登入用户资讯...')
+            try:
+                profile = driver.find_element(By.XPATH, '//*[@class="gb_A gb_Ma gb_f"]').get_attribute('aria-label')
+                logger.info(f'目前登入账户: {profile}')
                 # logged in with correct account
-                if gmail in login_info:
+                if gmail in profile:
                     logger.info('已经登入正确账户，无需再次登入')
                     return
-            else:
-                logger.info('找不到登入账户资讯')
+            except NoSuchElementException:
+                logger.info('找不到登入用户资讯')
 
             # logout current account
-            logger.info('正在寻找登出按钮...')
+            logger.info('正在尝试登出当前账户...')
             logout = WebDriverWait(driver, 5).until(
                 lambda t_driver: t_driver.find_element(
                     By.XPATH, '//*[@id="gb"]/div/div[1]/div[2]/div/a'
                 )
             )
-
-            logger.info('正在登出账户...')
-
             driver.get(logout.get_attribute('href'))
             driver.find_element(By.XPATH, '//*[@id="signout"]').click()
 
