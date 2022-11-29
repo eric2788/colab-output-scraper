@@ -123,7 +123,7 @@ def run_colab(gmail: str, password: str) -> None:
 
         list = url_regexp.findall(output.text)
         if len(list) == 0:
-            raise RuntimeError(f"无法透过 {url_regexp.pattern} 找到地址，可能是Colab运行失败或pattern有误")
+            raise RuntimeError(f"无法透过 {url_regexp.pattern} 找到地址，可能是Colab运行失败或pattern有误: {output.text}")
         
         logger.info(f'执行成功。最新的链接地址为 {list[0]}')
         
