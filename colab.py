@@ -1,19 +1,15 @@
 import undetected_chromedriver.v2 as uc
-from selenium.webdriver import Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-from selenium.webdriver.chrome.options import Options
+
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions
 from selenium.common.exceptions import TimeoutException, NoAlertPresentException, JavascriptException, WebDriverException
-import pathlib
 from time import sleep
 import regex, json, os
-from sys import platform
 from constrants import *
 import logging
-from pyvirtualdisplay import Display
+from webdriver import init_driver
 
 APP_URL = ""
 
@@ -21,128 +17,108 @@ logger = logging.getLogger('colab')
 
 url_regexp = regex.compile(r'Running\son\spublic\sURL:\s(https:\/\/[a-f0-9]+\.gradio\.app)', regex.S | regex.M)
 
-script_directory = pathlib.Path().absolute()
-
-caps = DesiredCapabilities.CHROME.copy()
-caps["goog:loggingPrefs"] = {"performance": "ALL"}  # enable performance logs
-
-options = Options()
-options.add_argument("--disable-extensions")
-options.add_argument("--disable-gpu")
-
-driver_path = None
-display: Display = None
-
-if platform.startswith("linux"):
-    logger.info('using linux os')
-    driver_path = '/usr/bin/chromedriver'
-    options.add_argument("--no-sandbox") # linux only
-    # use this to replace headless
-    display = Display(visible=0, size=(800, 600))
-    display.start()
-
-driver: Chrome = uc.Chrome(desired_capabilities=caps, options=options, driver_executable_path=driver_path)
-driver.implicitly_wait(30)
-#driver = webdriver.Chrome('./chromedriver', desired_capabilities=caps, options=options)
+driver = init_driver()
 
 os.makedirs(DATA_DIR, exist_ok=True)
 
+
+
 # copy from net
 def run_colab(gmail: str, password: str) -> None:
-    global driver
     try:
         driver.get('https://colab.research.google.com')
-    except WebDriverException as e:   # session expired
-        logger.warning(f'error while opening page: {e}')
-        # reassign driver
-        driver = uc.Chrome(desired_capabilities=caps, options=options, driver_executable_path=driver_path)
-        driver.implicitly_wait(30)
-        raise RuntimeError(f'打開colab網頁失敗: {e}, 請重試一次')
-    
-    load_cookie()
+        load_cookie()
 
-    force_refresh_webpage(NOTEBOOK_URL)
+        force_refresh_webpage(NOTEBOOK_URL)
 
-    login_google_acc(gmail, password)
-
-    sleep(3)
-    try:
-        wait = WebDriverWait(driver, 30)
-        wait.until(expected_conditions.visibility_of(driver.find_element(By.ID, CELL_OUTPUT_ID)))
-    except JavascriptException:
-        # failed to fill input box
-        # mostly, this happens when Google is asking you to do extra verification i.e. phone number
-        # Colab page won't be loaded normally, then result in this error.
-        raise RuntimeError(
-            f"Google账密验证成功，但Colab页面没有被成功加载。可能是因为Google正在要求账号进行额外验证或账号不再可用！"
-            f"当前账号：{gmail}"
-        )
-
-    logger.info('successfully going to colab page...')
-
-    running_status = driver.find_element(By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]').get_attribute('class')
-    if "running" in running_status:
-        logger.info("interrupt previous execution...")
-        # interrupt previous execution
-        driver.find_element(By.XPATH, '/html/body').send_keys(Keys.CONTROL + 'm')
-        sleep(0.3)
-        driver.find_element(By.XPATH, '/html/body').send_keys('i')
-
-        try:
-            wait = WebDriverWait(driver, 30)
-            wait.until(expected_conditions.text_to_be_present_in_element(
-                (By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]//pre'),
-                'KeyboardInterrupt'
-            ))
-            logger.info('successfully interrupted previous execution.')
-        except TimeoutException:
-            logger.warning('cannot interrupt current exception.')
+        login_google_acc(gmail, password)
 
         sleep(3)
+        try:
+            wait = WebDriverWait(driver, 30)
+            wait.until(expected_conditions.visibility_of(driver.find_element(By.ID, CELL_OUTPUT_ID)))
+        except JavascriptException:
+            # failed to fill input box
+            # mostly, this happens when Google is asking you to do extra verification i.e. phone number
+            # Colab page won't be loaded normally, then result in this error.
+            raise RuntimeError(
+                f"Google账密验证成功，但Colab页面没有被成功加载。可能是因为Google正在要求账号进行额外验证或账号不再可用！"
+                f"当前账号：{gmail}"
+            )
 
-    logger.info('removing previous output...')
+        logger.info('successfully going to colab page...')
 
-    driver.execute_script(f"""
-        document.querySelector('#{CELL_OUTPUT_ID}  iron-icon[command=clear-focused-or-selected-outputs]').click()
-    """)
+        running_status = driver.find_element(By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]').get_attribute('class')
+        if "running" in running_status:
+            logger.info("interrupt previous execution...")
+            # interrupt previous execution
+            driver.find_element(By.XPATH, '/html/body').send_keys(Keys.CONTROL + 'm')
+            sleep(0.3)
+            driver.find_element(By.XPATH, '/html/body').send_keys('i')
 
-    sleep(2)
+            try:
+                wait = WebDriverWait(driver, 30)
+                wait.until(expected_conditions.text_to_be_present_in_element(
+                    (By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]//pre'),
+                    'KeyboardInterrupt'
+                ))
+                logger.info('successfully interrupted previous execution.')
+            except TimeoutException:
+                logger.warning('cannot interrupt current exception.')
 
-    logger.info('execute completed. trying to run all cells.')
+            sleep(3)
 
-    # run all cells
-    driver.find_element(By.XPATH, '/html/body').send_keys(Keys.CONTROL + Keys.F9)
+        logger.info('removing previous output...')
 
-    # If Google asks you to confirm running this notebook
-    try:
-        wait_and_click_element(
-            by=By.XPATH, value='/html/body/colab-dialog/paper-dialog/div[2]/paper-button[2]'
-        )
-    except TimeoutException:
-        pass
+        driver.execute_script(f"""
+            document.querySelector('#{CELL_OUTPUT_ID}  iron-icon[command=clear-focused-or-selected-outputs]').click()
+        """)
 
-    try:
-        wait = WebDriverWait(driver, 15 * 60)
-        wait.until(expected_conditions.text_to_be_present_in_element(
-            (By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]//pre'),
-            'Running on public URL:'
-        ))
-    except TimeoutException:
-        raise RuntimeError('cannot execute the python program')
+        sleep(2)
 
-    output = driver.find_element(By.XPATH, f"//*[@id='{CELL_OUTPUT_ID}']//pre")
+        logger.info('execute completed. trying to run all cells.')
 
-    list = url_regexp.findall(output.text)
-    if len(list) == 0:
-        raise RuntimeError(f"cannot find url by pattern {url_regexp.pattern}")
-    
-    logger.info(f'the latest url link is {list[0]}')
-    
-    global APP_URL
-    APP_URL = list[0]
+        # run all cells
+        driver.find_element(By.XPATH, '/html/body').send_keys(Keys.CONTROL + Keys.F9)
 
-    keep_page_active()
-    save_cookie()
+        # If Google asks you to confirm running this notebook
+        try:
+            wait_and_click_element(
+                by=By.XPATH, value='/html/body/colab-dialog/paper-dialog/div[2]/paper-button[2]'
+            )
+        except TimeoutException:
+            pass
+
+        try:
+            wait = WebDriverWait(driver, 15 * 60)
+            wait.until(expected_conditions.text_to_be_present_in_element(
+                (By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]//pre'),
+                'Running on public URL:'
+            ))
+        except TimeoutException:
+            raise RuntimeError('cannot execute the python program')
+
+        output = driver.find_element(By.XPATH, f"//*[@id='{CELL_OUTPUT_ID}']//pre")
+
+        list = url_regexp.findall(output.text)
+        if len(list) == 0:
+            raise RuntimeError(f"cannot find url by pattern {url_regexp.pattern}")
+        
+        logger.info(f'the latest url link is {list[0]}')
+        
+        global APP_URL
+        APP_URL = list[0]
+
+        keep_page_active()
+        save_cookie()
+    except WebDriverException as e:
+        if "session deleted" in e or "page crash" in e:
+            logger.warn(f'error while running driver: {e}')
+            logger.warn('reinititalize driver...')
+            global driver
+            driver = init_driver()
+        else:
+            raise e
 
 def login_google_acc(gmail: str, password: str) -> None:
     try:
