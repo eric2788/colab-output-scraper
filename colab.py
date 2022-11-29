@@ -6,7 +6,7 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions
-from selenium.common.exceptions import TimeoutException, NoAlertPresentException, JavascriptException, InvalidSessionIdException, WebDriverException
+from selenium.common.exceptions import TimeoutException, NoAlertPresentException, JavascriptException, WebDriverException
 import pathlib
 from time import sleep
 import regex, json, os
@@ -52,7 +52,7 @@ def run_colab(gmail: str, password: str) -> None:
     global driver
     try:
         driver.get('https://colab.research.google.com')
-    except {InvalidSessionIdException, WebDriverException} as e:   # session expired
+    except WebDriverException as e:   # session expired
         logger.warning(f'error while opening page: {e}')
         # reassign driver
         driver = uc.Chrome(desired_capabilities=caps, options=options, driver_executable_path=driver_path)

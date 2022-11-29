@@ -23,12 +23,12 @@ colab_lock = Lock()
 @app.errorhandler(Exception)
 def handle_error(e):
     code = 500
+    logging.error(f'resolved error: {e}')
     if isinstance(e, HTTPException):
         code = e.code
-    logging.error(f'resolved error: {e}')
-    logging.exception(e)
+    else:
+        logging.exception(e)
     return jsonify(code=code, msg=str(e)), code
-
 
 def validate_app_url() -> bool:
     if not colab.APP_URL or not colab.APP_URL.startswith('http'):
