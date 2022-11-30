@@ -1,21 +1,26 @@
+import json
+import logging
 from sys import platform
 from time import sleep
-import logging
-import json
+
 import undetected_chromedriver.v2 as uc
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.common.exceptions import (JavascriptException,
+                                        NoAlertPresentException,
+                                        NoSuchElementException,
+                                        TimeoutException, WebDriverException)
+from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.support import expected_conditions
-from selenium.webdriver import Chrome
-from selenium.common.exceptions import NoAlertPresentException, TimeoutException, WebDriverException
-from constrants import DISABLE_DEV_SHM, COOKIE_PATH
+from selenium.webdriver.support.wait import WebDriverWait
+
+from constrants import COOKIE_PATH, DISABLE_DEV_SHM
 
 logger = logging.getLogger(__name__)
 
 
-def init_driver() -> Chrome:
+def init_driver(version:int = 107) -> Chrome:
     caps = DesiredCapabilities.CHROME.copy()
     caps["goog:loggingPrefs"] = {
         "performance": "ALL"}  # enable performance logs
@@ -23,11 +28,9 @@ def init_driver() -> Chrome:
     options = Options()
     options.add_argument("--disable-extensions")
     options.add_argument("--disable-gpu")
-    options.add_argument("start-maximized")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option('useAutomationExtension', False)
-    options.add_argument(
-        '--user-agent="Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 640 XL LTE) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Mobile Safari/537.36 Edge/12.10166"')
+    #options.add_argument("--start-maximized")
+    #options.add_argument(
+    #    '--user-agent="Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 640 XL LTE) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Mobile Safari/537.36 Edge/12.10166"')
 
     driver_path = None
 
@@ -40,11 +43,12 @@ def init_driver() -> Chrome:
     driver: Chrome = uc.Chrome(
         desired_capabilities=caps,
         options=options,
-        driver_executable_path=driver_path
+        driver_executable_path=driver_path,
+        version_main=version
     )
     driver.implicitly_wait(30)
-    logger.info('user-agent: %s', driver.execute_script("return navigator.userAgent;"))
-    logger.info('webdriver detected: %s', driver.execute_script("return navigator.webdriver;"))
+    print('user-agent:', driver.execute_script("return navigator.userAgent;"))
+    print('webdriver detected:', driver.execute_script("return navigator.webdriver;"))
     return driver
 
 
@@ -61,24 +65,15 @@ def wait_and_click_element(driver: Chrome, by: str, value: str,
                            click_with_js: bool = True
                            ) -> bool:
     try:
-
-        try:
-            element = WebDriverWait(driver, wait).until(
+        element = WebDriverWait(driver, wait).until(
                 lambda t_driver: t_driver.find_element(by, value)
-            )
-        except TimeoutException as e:
-            logger.warning('等待 %d 秒后依然找不到元素: %s (%s)', wait, value, e.msg)
-            logger.warning(e.screen)
-            return False
+        )
 
         sleep(3)
 
-        try:
-            WebDriverWait(driver, 3).until(
-                expected_conditions.element_to_be_clickable((by, value))
-            )
-        except TimeoutException as e:
-            logger.warning('元素等待逾时仍然不可点击: %s, 尝试强行点击...', e)
+        WebDriverWait(driver, 3).until(
+            expected_conditions.element_to_be_clickable((by, value))
+        )
         
         if click_with_js:
             driver.execute_script("arguments[0].click();", element)
@@ -87,10 +82,8 @@ def wait_and_click_element(driver: Chrome, by: str, value: str,
        
         sleep(0.1)
         return True
-    except WebDriverException as e:
-        logger.warning('无法点击元素 "%s": %s', value, e)
+    except TimeoutException:
         return False
-
 
 def keep_page_active(driver: Chrome):
     # keep webpage active
@@ -126,24 +119,44 @@ def load_cookie(driver: Chrome):
         logger.warning('加载Cookie失败: %s', ex)
 
 
-def escape_recaptcha(driver: Chrome):
+def escape_runtime_disconnect(driver: Chrome):
     try:
-        WebDriverWait(driver, 20).until(expected_conditions.frame_to_be_available_and_switch_to_it(
-            (By.XPATH, "//iframe[starts-with(@name, 'a-') and starts-with(@src, 'https://www.google.com/recaptcha')]")))
-        logger.info('发现 Google reCAPTCHA，尝试跳过...')
-        sleep(3)
-        result = wait_and_click_element(
-            driver,
-            by=By.XPATH,
-            value="//div[@class='recaptcha-checkbox-checkmark']",
-            wait=15,
-            click_with_js=False
-        )
-        if result:
-            logger.info('跳过成功')
-        else:
-            logger.warning('跳过失败')
+        dialog = WebDriverWait(driver, 20).until(expected_conditions.visibility_of_element_located(By.TAG_NAME, 'colab-yesno-dialog'))
+
     except TimeoutException:
         pass
-    finally:
-        driver.switch_to.default_content() # switch back to main frame
+
+def escape_recaptcha(driver: Chrome):
+    try:
+        # WebDriverWait(driver, 20).until(expected_conditions.frame_to_be_available_and_switch_to_it(
+        #    (By.XPATH, "//iframe[starts-with(@name, 'a-') and starts-with(@src, 'https://www.google.com/recaptcha')]")
+        # ))
+        WebDriverWait(driver, 20).until(expected_conditions.visibility_of_element_located((By.TAG_NAME, 'colab-recaptcha-dialog')))
+        logger.info('发现 Google reCAPTCHA, 尝试跳过...')
+
+        WebDriverWait(driver, 20).until(expected_conditions.frame_to_be_available_and_switch_to_it(
+            (By.XPATH, "//iframe[starts-with(@name, 'a-') and starts-with(@src, 'https://www.google.com/recaptcha')]")
+        ))
+
+        try:
+            wait = WebDriverWait(driver, 10)
+            checkmark = wait.until(expected_conditions.element_to_be_clickable((
+                        By.XPATH, "//div[@class='recaptcha-checkbox-checkmark']"
+            )))
+            driver.execute_script('arguments[0].click()', checkmark)
+            logger.info('跳过成功')
+        except WebDriverException as e:
+            if isinstance(e, NoSuchElementException):
+                logger.warning('找不到recaptcha按钮元素: %s', e.msg)
+            elif isinstance(e, TimeoutException) or isinstance(e, JavascriptException):
+                logger.warning('绕过验证码按钮无法点击: %s', e.msg)
+            logger.warning('将尝试直接使用JS代码点击')
+            try:
+                driver.execute_script("document.querySelector('div.recaptcha-checkbox-checkmark').click()")
+                logger.info('跳过成功')
+            except JavascriptException as e:
+                logger.warning("使用JS代码点击依然失败: %s", e.msg)
+        finally:
+            driver.switch_to.default_content()
+    except TimeoutException:
+        pass
