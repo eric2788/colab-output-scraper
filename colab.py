@@ -291,7 +291,8 @@ def start_recaptcha_thread():
 
 def quit_driver():
     logger.info('正在关闭chromedriver...')
-    stop_recaptcha_thread()
+    global STOP
+    STOP = True
     save_cookie(driver)
     driver.quit()
     if display:
