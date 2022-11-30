@@ -1,13 +1,15 @@
 # create flask web app to get the APP_URL from colab.py
-import colab
-from flask import Flask, jsonify
-from waitress import serve
-import requests
 import logging
-from constrants import EMAIL, PASSWORD, DEBUG_MODE
-from werkzeug.exceptions import HTTPException
 import signal
 from threading import Lock
+
+import requests
+from flask import Flask, jsonify
+from waitress import serve
+from werkzeug.exceptions import HTTPException
+
+import colab
+from constrants import DEBUG_MODE, EMAIL, PASSWORD
 
 if DEBUG_MODE:
     logging.basicConfig(level=logging.DEBUG)
