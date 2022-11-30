@@ -32,7 +32,7 @@ display: Display = None
 
 if sys.platform.startswith('linux'):
     # use this to replace headless
-    display = Display(visible=0, size=(1280, 720))
+    display = Display()
     display.start()
 
 driver = init_driver()

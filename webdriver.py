@@ -9,7 +9,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver import Chrome
-from selenium.common.exceptions import NoAlertPresentException, TimeoutException
+from selenium.common.exceptions import NoAlertPresentException, TimeoutException, WebDriverException
 from constrants import DISABLE_DEV_SHM, COOKIE_PATH
 
 logger = logging.getLogger(__name__)
@@ -51,20 +51,32 @@ def force_refresh_webpage(driver: Chrome, url: str) -> None:
         pass
 
 
-def wait_and_click_element(driver: Chrome, by: str, value: str, wait: int = 5) -> bool:
+def wait_and_click_element(driver: Chrome, by: str, value: str,
+                           wait: int = 5,
+                           click_with_js: bool = True
+                           ) -> bool:
     try:
         element = WebDriverWait(driver, wait).until(
-        lambda t_driver: t_driver.find_element(by, value)
+            lambda t_driver: t_driver.find_element(by, value)
         )
         sleep(3)
-        WebDriverWait(driver, 3).until(
-            expected_conditions.element_to_be_clickable((by, value))
-        )
-        driver.execute_script("arguments[0].click();", element)
+
+        try:
+            WebDriverWait(driver, 3).until(
+                expected_conditions.element_to_be_clickable((by, value))
+            )
+        except TimeoutException as e:
+            logger.warning('元素等待逾时仍然不可点击: %s, 尝试强行点击...', e)
+        
+        if click_with_js:
+            driver.execute_script("arguments[0].click();", element)
+        else:
+            element.click()
+       
         sleep(0.1)
         return True
-    except TimeoutException as e:
-        logger.warning('无法点击元素 "%s", 等待元素超时: %s', value, e)
+    except WebDriverException as e:
+        logger.warning('无法点击元素 "%s": %s', value, e.msg)
         return False
 
 
@@ -101,6 +113,7 @@ def load_cookie(driver: Chrome):
     except Exception as ex:
         logger.warning('加载Cookie失败: %s', ex)
 
+
 def escape_recaptcha(driver: Chrome):
     try:
         WebDriverWait(driver, 20).until(expected_conditions.frame_to_be_available_and_switch_to_it(
@@ -111,7 +124,8 @@ def escape_recaptcha(driver: Chrome):
             driver,
             by=By.XPATH,
             value="//div[@class='recaptcha-checkbox-checkmark']",
-            wait=15
+            wait=15,
+            click_with_js=False
         )
         if result:
             logger.info('跳过成功')
