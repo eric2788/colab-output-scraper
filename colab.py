@@ -150,6 +150,7 @@ def run_colab(gmail: str, password: str) -> None:
 
         keep_page_active(driver)
         logger.info('成功执行保持页面连接的JS代码')
+        save_cookie(driver) # save the recaptcha cookie
         start_recaptcha_thread()
     except WebDriverException as ex:
         if "session deleted" in str(ex.msg) or "page crash" in str(ex.msg):
@@ -299,4 +300,5 @@ def quit_driver():
         display.stop()
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
     run_colab(EMAIL, PASSWORD)
