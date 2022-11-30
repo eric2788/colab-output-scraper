@@ -51,18 +51,21 @@ def force_refresh_webpage(driver: Chrome, url: str) -> None:
         pass
 
 
-def wait_and_click_element(driver: Chrome, by: str, value: str) -> any:
-    element = WebDriverWait(driver, 5).until(
+def wait_and_click_element(driver: Chrome, by: str, value: str, wait: int = 5) -> bool:
+    try:
+        element = WebDriverWait(driver, wait).until(
         lambda t_driver: t_driver.find_element(by, value)
-    )
-    sleep(3)
-    WebDriverWait(driver, 3).until(
-        expected_conditions.element_to_be_clickable((by, value))
-    )
-    driver.execute_script("arguments[0].click();", element)
-
-    sleep(0.1)
-    return element
+        )
+        sleep(3)
+        WebDriverWait(driver, 3).until(
+            expected_conditions.element_to_be_clickable((by, value))
+        )
+        driver.execute_script("arguments[0].click();", element)
+        sleep(0.1)
+        return True
+    except TimeoutException as e:
+        logger.warning('无法点击元素 "%s", 等待元素超时: %s', value, e)
+        return False
 
 
 def keep_page_active(driver: Chrome):
@@ -104,11 +107,15 @@ def escape_recaptcha(driver: Chrome):
             (By.XPATH, "//iframe[starts-with(@name, 'a-') and starts-with(@src, 'https://www.google.com/recaptcha')]")))
         logger.info('发现 Google reCAPTCHA，尝试跳过...')
         sleep(3)
-        wait_and_click_element(
+        result = wait_and_click_element(
             driver,
-            by=By.CSS_SELECTOR,
-            value="div.recaptcha-checkbox-checkmark"
+            by=By.XPATH,
+            value="//div[@class='recaptcha-checkbox-checkmark']",
+            wait=15
         )
-        logger.info('跳过成功')
+        if result:
+            logger.info('跳过成功')
+        else:
+            logger.warning('跳过失败')
     except TimeoutException:
         pass
