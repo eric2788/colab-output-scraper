@@ -118,30 +118,19 @@ def load_cookie(driver: Chrome):
     except Exception as ex:
         logger.warning('加载Cookie失败: %s', ex)
 
-
-def escape_runtime_disconnect(driver: Chrome):
-    try:
-        dialog = WebDriverWait(driver, 20).until(expected_conditions.visibility_of_element_located(By.TAG_NAME, 'colab-yesno-dialog'))
-
-    except TimeoutException:
-        pass
-
 def escape_recaptcha(driver: Chrome):
     try:
-        # WebDriverWait(driver, 20).until(expected_conditions.frame_to_be_available_and_switch_to_it(
-        #    (By.XPATH, "//iframe[starts-with(@name, 'a-') and starts-with(@src, 'https://www.google.com/recaptcha')]")
-        # ))
         WebDriverWait(driver, 20).until(expected_conditions.visibility_of_element_located((By.TAG_NAME, 'colab-recaptcha-dialog')))
         logger.info('发现 Google reCAPTCHA, 尝试跳过...')
 
         WebDriverWait(driver, 20).until(expected_conditions.frame_to_be_available_and_switch_to_it(
-            (By.XPATH, "//iframe[starts-with(@name, 'a-') and starts-with(@src, 'https://www.google.com/recaptcha')]")
+            (By.XPATH, "//iframe[@title='reCAPTCHA']")
         ))
 
         try:
             wait = WebDriverWait(driver, 10)
             checkmark = wait.until(expected_conditions.element_to_be_clickable((
-                        By.XPATH, "//div[@class='recaptcha-checkbox-checkmark']"
+                        By.XPATH, "//div[@class='rc-anchor-center-container']"
             )))
             driver.execute_script('arguments[0].click()', checkmark)
             logger.info('跳过成功')
@@ -152,10 +141,10 @@ def escape_recaptcha(driver: Chrome):
                 logger.warning('绕过验证码按钮无法点击: %s', e.msg)
             logger.warning('将尝试直接使用JS代码点击')
             try:
-                driver.execute_script("document.querySelector('div.recaptcha-checkbox-checkmark').click()")
+                driver.execute_script("document.querySelector('div.rc-anchor-center-container').click()")
                 logger.info('跳过成功')
-            except JavascriptException as e:
-                logger.warning("使用JS代码点击依然失败: %s", e.msg)
+            except JavascriptException as ex:
+                logger.warning("使用JS代码点击依然失败: %s", ex.msg)
         finally:
             driver.switch_to.default_content()
     except TimeoutException:
