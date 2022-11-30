@@ -88,8 +88,6 @@ if __name__ == '__main__':
         'port': 8080,
     }
 
-    colab.start_recaptcha_thread()
-
     if DEBUG_MODE:
         app.run(**args, debug=DEBUG_MODE, use_reloader=False)
     else:

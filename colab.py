@@ -46,6 +46,8 @@ def run_colab(gmail: str, password: str) -> None:
     global driver
     try:
 
+        stop_recaptcha_thread()
+
         logger.info('开始运行colab....')
 
         driver.get('https://colab.research.google.com')
@@ -148,6 +150,7 @@ def run_colab(gmail: str, password: str) -> None:
 
         keep_page_active(driver)
         logger.info('成功执行保持页面连接的JS代码')
+        start_recaptcha_thread()
     except WebDriverException as ex:
         if "session deleted" in str(ex.msg) or "page crash" in str(ex.msg):
             logger.warning('运行chromedriver报错: %s', ex.msg)
@@ -293,6 +296,6 @@ def quit_driver():
     driver.quit()
     if display:
         display.stop()
-        
+
 if __name__ == '__main__':
     run_colab(EMAIL, PASSWORD)
