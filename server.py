@@ -16,32 +16,32 @@ else:
 
 app = Flask(__name__)
 
-logger = logging.getLogger('server')
+logger = logging.getLogger(__name__)
 
 colab_lock = Lock()
+
 
 @app.errorhandler(Exception)
 def handle_error(e):
     code = 500
-    logging.error(f'resolved error: {e}')
+    logging.error('resolved error: %s', e)
     if isinstance(e, HTTPException):
         code = e.code
     elif not isinstance(e, RuntimeError):
         logging.exception(e)
     return jsonify(code=code, msg=str(e)), code
 
+
 def validate_app_url() -> bool:
     if not colab.APP_URL or not colab.APP_URL.startswith('http'):
         return False
     try:
-        res = requests.get(colab.APP_URL)
-        if res.status_code != 200:
-            return False
-        else:
-            return True
+        res = requests.get(colab.APP_URL, timeout=30)
+        return res.status_code != 200
     except Exception as e:
         logging.warning(e)
         return False
+
 
 @app.route('/launch_colab', methods=['POST'])
 def launch_colab():
@@ -52,11 +52,9 @@ def launch_colab():
             'msg': 'colab is launching, please wait until finish'
         }), 400
 
-    colab_lock.acquire()
-    try:
-        colab.run_colab(EMAIL, PASSWORD) # 5 ~ 10 mins
-    finally:
-        colab_lock.release()
+    with colab_lock:
+        colab.run_colab(EMAIL, PASSWORD)  # 5 ~ 10 mins
+
     return jsonify({
         'code': 200,
         'msg': 'success',
@@ -72,23 +70,23 @@ def get_url():
             'msg': 'success',
             'url': colab.APP_URL
         })
-    else:
-        return jsonify({
-            'code': 410,
-            'msg': 'url is not valid or expired'
-        })
-
+    return jsonify({
+        'code': 410,
+        'msg': 'url is not valid or expired'
+    })
 
 if __name__ == '__main__':
 
     logger.info('starting web server...')
 
-    signal.signal(signal.SIGTERM, colab.quit_driver)
+    signal.signal(signal.SIGTERM, lambda signum, frame: colab.quit_driver())
 
     args = {
         'host': '0.0.0.0',
         'port': 8080,
     }
+
+    colab.start_recaptcha_thread()
 
     if DEBUG_MODE:
         app.run(**args, debug=DEBUG_MODE, use_reloader=False)

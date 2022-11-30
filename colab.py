@@ -1,21 +1,32 @@
-import undetected_chromedriver.v2 as uc
+
+import logging
+import os
+import re
+import sys
+from time import sleep
+from threading import Thread
+
+from pyvirtualdisplay import Display
+from selenium.common.exceptions import (JavascriptException,
+                                        NoSuchElementException,
+                                        TimeoutException, WebDriverException)
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from pyvirtualdisplay import Display
-from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions
-from selenium.common.exceptions import TimeoutException, NoAlertPresentException, JavascriptException, WebDriverException, NoSuchElementException
-from time import sleep
-import regex, json, os, sys
-from constrants import *
-import logging
-from webdriver import init_driver
+from selenium.webdriver.support.wait import WebDriverWait
+
+from constrants import CELL_OUTPUT_ID, DATA_DIR, EMAIL, NOTEBOOK_URL, PASSWORD
+from webdriver import (force_refresh_webpage, init_driver, keep_page_active,
+                       load_cookie, save_cookie, wait_and_click_element, escape_recaptcha)
 
 APP_URL = ""
+STOP = False
 
-logger = logging.getLogger('colab')
+recaptcha_checking_thread: Thread = None
 
-url_regexp = regex.compile(r'Running\son\spublic\sURL:\s(https:\/\/[a-f0-9]+\.gradio\.app)', regex.S | regex.M)
+logger = logging.getLogger(__name__)
+
+url_regexp = re.compile(r'Running on public URL: (https:\/\/[a-f0-9]+\.gradio\.app)', re.S | re.M)
 
 display: Display = None
 
@@ -25,21 +36,23 @@ if sys.platform.startswith('linux'):
     display.start()
 
 driver = init_driver()
+recaptcha_checking_thread: Thread = None
 
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # copy from net
 def run_colab(gmail: str, password: str) -> None:
+
     global driver
     try:
 
         logger.info('开始运行colab....')
 
         driver.get('https://colab.research.google.com')
-        load_cookie()
+        load_cookie(driver)
 
         logger.info('正在刷新 colab notebook 页面...')
-        force_refresh_webpage(NOTEBOOK_URL)
+        force_refresh_webpage(driver, NOTEBOOK_URL)
         logger.info('刷新完毕')
 
         logger.info('开始登入 google 账号...')
@@ -49,11 +62,11 @@ def run_colab(gmail: str, password: str) -> None:
         try:
             wait = WebDriverWait(driver, 30)
             wait.until(expected_conditions.visibility_of(driver.find_element(By.ID, CELL_OUTPUT_ID)))
-        except JavascriptException:
+        except JavascriptException as ex:
             raise RuntimeError(
                 f"Google账密验证成功，但找不到 ID 为 {CELL_OUTPUT_ID} 的储存格，可能是Colab页面没有被成功加载，又或者填写有误"
                 f"当前账号：{gmail}"
-            )
+            ) from ex
 
         logger.info('成功跳转到 colab 页面')
 
@@ -93,23 +106,14 @@ def run_colab(gmail: str, password: str) -> None:
         # If Google asks you to confirm running this notebook
         try:
             wait_and_click_element(
+                driver,
                 by=By.XPATH, value='/html/body/colab-dialog/paper-dialog/div[2]/paper-button[2]'
             )
             logger.info('colab 出现确认运行页面，已成功点击确认')
         except TimeoutException:
             pass
 
-        try:
-            WebDriverWait(driver, 20).until(expected_conditions.frameToBeAvailableAndSwitchToIt((By.XPATH, "//iframe[starts-with(@name, 'a-') and starts-with(@src, 'https://www.google.com/recaptcha')]"))); 
-            logger.info('发现 Google reCAPTCHA，尝试跳过...')
-            sleep(3)
-            wait_and_click_element(
-                by=By.CSS_SELECTOR, 
-                value="div.recaptcha-checkbox-checkmark"
-            )
-            logger.info('跳过成功')
-        except TimeoutException:
-            pass
+        escape_recaptcha(driver)
 
         try:
             logger.info('正在运行并等待相关字眼出现...')
@@ -118,39 +122,40 @@ def run_colab(gmail: str, password: str) -> None:
                 (By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]//pre'),
                 'Running on public URL:'
             ))
-        except TimeoutException:
+        except TimeoutException as ex:
             try:
                 output = driver.find_element(By.XPATH, f'//*[@id="{CELL_OUTPUT_ID}"]//pre').text
                 if not output:
-                    raise RuntimeError('colab 运行超时，但是没有输出，可能被机器人挡住？')
+                    raise RuntimeError('colab 运行超时，但是没有输出，可能被机器人挡住？') from ex
                 else:
-                    logger.warning(f'colab 运行超时，输出内容如下:')
+                    logger.warning('colab 运行超时，输出内容如下:')
                     for output in output.split('\n'):
                         logger.warning(output)
-                    raise RuntimeError('运行逾时: 无法在output中找到相关字眼，可能是Colab运行失败')
-            except NoSuchElementException:
-                raise RuntimeError(f'运行逾时, 且找不到输出内容的元素')
+                    raise RuntimeError('运行逾时: 无法在output中找到相关字眼，可能是Colab运行失败') from ex
+            except NoSuchElementException as exc:
+                raise RuntimeError('运行逾时, 且找不到输出内容的元素') from exc
 
         output = driver.find_element(By.XPATH, f"//*[@id='{CELL_OUTPUT_ID}']//pre")
 
-        list = url_regexp.findall(output.text)
-        if len(list) == 0:
+        urls = url_regexp.findall(output.text)
+        if len(urls) == 0:
             raise RuntimeError(f"无法透过 {url_regexp.pattern} 找到地址，可能是Colab运行失败或pattern有误: {output.text}")
         
-        logger.info(f'执行成功。最新的链接地址为 {list[0]}')
+        logger.info('执行成功。最新的链接地址为 %s', urls[0])
         
         global APP_URL
-        APP_URL = list[0]
+        APP_URL = urls[0]
 
-        keep_page_active()
-    except WebDriverException as e:
-        if "session deleted" in str(e.msg) or "page crash" in str(e.msg):
-            logger.warn(f'运行chromedriver报错: {e}')
-            logger.warn('正在重新初始化chromedriver...')
+        keep_page_active(driver)
+        logger.info('成功执行保持页面连接的JS代码')
+    except WebDriverException as ex:
+        if "session deleted" in str(ex.msg) or "page crash" in str(ex.msg):
+            logger.warning('运行chromedriver报错: %s', ex.msg)
+            logger.warning('正在重新初始化chromedriver...')
             driver = init_driver()
-            raise RuntimeError(f'运行colab时报错: {e}, 请重试')
+            raise RuntimeError(f'运行colab时报错: {ex}, 请重试') from ex
         else:
-            raise e
+            raise ex
     finally:
         driver.save_screenshot(f'{DATA_DIR}/checkpoint.png')
         logger.info('成功保存上一个检查点的截图')
@@ -171,7 +176,7 @@ def login_google_acc(gmail: str, password: str) -> None:
             logger.info('找不到登入按钮，正在寻找目前登入用户资讯...')
             try:
                 profile = driver.find_element(By.XPATH, '//*[@class="gb_A gb_Ma gb_f"]').get_attribute('aria-label')
-                logger.info(f'目前登入账户: {profile}')
+                logger.info('目前登入账户: %s', profile)
                 # logged in with correct account
                 if gmail in profile:
                     logger.info('已经登入正确账户，无需再次登入')
@@ -199,6 +204,7 @@ def login_google_acc(gmail: str, password: str) -> None:
         # if prompt, choose "Use another account" when login
         try:
             wait_and_click_element(
+                driver,
                 by=By.XPATH,
                 value='//*[@id="view_container"]/div/div/div[2]/div/div[1]/div/form/span/section/div/div/div/div/ul'
                       '/li[@class="JDAKTe eARute W7Aapd zpCp3 SmR8" and not(@jsname="fKeql")]'
@@ -232,17 +238,18 @@ def login_google_acc(gmail: str, password: str) -> None:
             )
             raise RuntimeError(f"Google账号 {gmail} 的密码填写有误！")
         except TimeoutException:
-            logger.info(f"成功登入Google账号：{gmail}")
-            save_cookie()
+            logger.info("成功登入Google账号：%s", gmail)
+            save_cookie(driver)
 
-    except TimeoutException:
+    except TimeoutException as ex:
         driver.save_screenshot('profile/timeout.png')
-        raise RuntimeError(f"登陆Google账号 {gmail} 发生超时，请检查网络和账密")
+        raise RuntimeError(f"登陆Google账号 {gmail} 发生超时，请检查网络和账密") from ex
 
     # In case of Google asking you to complete your account info
     try:
         # Wait for "not now" button occurs
         wait_and_click_element(
+            driver,
             by=By.XPATH, value='//*[@id="yDmH0d"]/c-wiz/div/div/div/div[2]/div[4]/div[1]/button'
         )
 
@@ -250,64 +257,42 @@ def login_google_acc(gmail: str, password: str) -> None:
     except TimeoutException:
         pass
 
-def force_refresh_webpage(url: str) -> None:
-    driver.get(url)
-    try:
-        driver.switch_to.alert.accept()
-    except NoAlertPresentException:
-        pass
+def loop_check_recaptcha():
+    while True:
+        sleep(10)
+        if not driver:
+            continue
+        if STOP:
+            break
+        escape_recaptcha(driver)
 
-def wait_and_click_element(by: str, value: str) -> any:
-    element = WebDriverWait(driver, 5).until(
-        lambda t_driver: t_driver.find_element(by, value)
-    )
-    sleep(3)
-    WebDriverWait(driver, 3).until(
-        expected_conditions.element_to_be_clickable((by, value))
-    )
-    driver.execute_script("arguments[0].click();", element)
+def stop_recaptcha_thread():
+    if not recaptcha_checking_thread:
+        logger.info('绕过recaptcha线程未启动, 已略过')
+        return
+    global STOP
+    STOP = True
+    recaptcha_checking_thread.join()
+    logger.info('绕过recaptcha线程成功停止')
 
-    sleep(0.1)
-    return element
-
-def keep_page_active():
-    # keep webpage active
-    driver.execute_script("""
-        function ConnectButton(){
-            console.log("Connect pushed");
-            document.querySelector("#top-toolbar > colab-connect-button").shadowRoot.querySelector("#connect").click()
-        }
-        setInterval(ConnectButton,60000);
-    """) 
-    logger.info('成功执行保持页面连接的JS代码')
-
-def save_cookie():
-    try:
-        cookies = driver.get_cookies()
-        if not cookies:
-            return
-        with open(COOKIE_PATH, 'w') as filehandler:
-            json.dump(cookies, filehandler)
-            logger.info('成功保存Cookie')
-    except Exception as e:
-        logger.warning(f'保存Cookie失败: {e}')
-
-def load_cookie():
-    try:
-        with open(COOKIE_PATH, 'r') as cookiesfile:
-            cookies = json.load(cookiesfile)
-        for cookie in cookies:
-            driver.add_cookie(cookie)
-        logger.info('成功加载Cookie')
-    except Exception as  e:
-        logger.warning(f'加载Cookie失败: {e}')
+def start_recaptcha_thread():
+    global recaptcha_checking_thread, STOP
+    if recaptcha_checking_thread:
+        logger.info('绕过recaptcha线程已启动, 已略过')
+        return
+    STOP = False
+    logger.info('正在启动绕过recaptcha线程...')
+    recaptcha_checking_thread = Thread(target=loop_check_recaptcha)
+    recaptcha_checking_thread.start()
+    logger.info('绕过recaptcha线程启动成功')
 
 def quit_driver():
     logger.info('正在关闭chromedriver...')
-    save_cookie()
+    stop_recaptcha_thread()
+    save_cookie(driver)
     driver.quit()
     if display:
         display.stop()
-
+        
 if __name__ == '__main__':
     run_colab(EMAIL, PASSWORD)
