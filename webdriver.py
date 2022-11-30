@@ -23,6 +23,9 @@ def init_driver() -> Chrome:
     options = Options()
     options.add_argument("--disable-extensions")
     options.add_argument("--disable-gpu")
+    options.add_argument("start-maximized")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
     options.add_argument(
         '--user-agent="Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 640 XL LTE) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Mobile Safari/537.36 Edge/12.10166"')
 
@@ -40,6 +43,8 @@ def init_driver() -> Chrome:
         driver_executable_path=driver_path
     )
     driver.implicitly_wait(30)
+    logger.info('user-agent: %s', driver.execute_script("return navigator.userAgent;"))
+    logger.info('webdriver detected: %s', driver.execute_script("return navigator.webdriver;"))
     return driver
 
 
@@ -56,9 +61,16 @@ def wait_and_click_element(driver: Chrome, by: str, value: str,
                            click_with_js: bool = True
                            ) -> bool:
     try:
-        element = WebDriverWait(driver, wait).until(
-            lambda t_driver: t_driver.find_element(by, value)
-        )
+
+        try:
+            element = WebDriverWait(driver, wait).until(
+                lambda t_driver: t_driver.find_element(by, value)
+            )
+        except TimeoutException as e:
+            logger.warning('等待 %d 秒后依然找不到元素: %s (%s)', wait, value, e.msg)
+            logger.warning(e.screen)
+            return False
+
         sleep(3)
 
         try:
@@ -76,7 +88,7 @@ def wait_and_click_element(driver: Chrome, by: str, value: str,
         sleep(0.1)
         return True
     except WebDriverException as e:
-        logger.warning('无法点击元素 "%s": %s', value, e.msg)
+        logger.warning('无法点击元素 "%s": %s', value, e)
         return False
 
 
@@ -133,3 +145,5 @@ def escape_recaptcha(driver: Chrome):
             logger.warning('跳过失败')
     except TimeoutException:
         pass
+    finally:
+        driver.switch_to.default_content() # switch back to main frame
