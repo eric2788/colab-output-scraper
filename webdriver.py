@@ -15,7 +15,7 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.wait import WebDriverWait
 
-from constrants import COOKIE_PATH, DISABLE_DEV_SHM, DISABLE_WEB_SECURITY
+from constrants import COOKIE_PATH, DISABLE_DEV_SHM, DISABLE_WEB_SECURITY, DATA_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -151,8 +151,7 @@ def escape_recaptcha(driver: Chrome):
             except JavascriptException as ex:
                 logger.warning("使用JS代码点击依然失败: %s", ex.msg)
         finally:
-            driver.save_screenshot('reCaptcha_frame.png')
+            driver.save_screenshot(f'{DATA_DIR}/reCaptcha.png')
             driver.switch_to.default_content()
-            driver.save_screenshot('reCaptcha_window.png')
     except TimeoutException:
         pass
