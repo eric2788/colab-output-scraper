@@ -15,7 +15,7 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.wait import WebDriverWait
 
-from constrants import COOKIE_PATH, DISABLE_DEV_SHM
+from constrants import COOKIE_PATH, DISABLE_DEV_SHM, DISABLE_WEB_SECURITY
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,8 @@ def init_driver(version:int = 107) -> Chrome:
     #options.add_argument("--start-maximized")
     #options.add_argument(
     #    '--user-agent="Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 640 XL LTE) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Mobile Safari/537.36 Edge/12.10166"')
+    if DISABLE_WEB_SECURITY:
+        options.add_argument("--disable-web-security")
 
     driver_path = None
 
@@ -142,7 +144,9 @@ def escape_recaptcha(driver: Chrome):
             logger.warning('将尝试直接使用JS代码点击')
             try:
                 print(driver.execute_script('return document.body.innerHTML;'))
-                driver.execute_script("document.querySelector('div.recaptcha-checkbox-checkmark').click()")
+                # test only
+                driver.execute_script("try { document.querySelector('div.recaptcha-checkbox-checkmark').click() } catch(e){ }")
+                driver.execute_script("document.querySelector('iframe[title=reCAPTCHA]').contentWindow.document.querySelector('div.recaptcha-checkbox-checkmark').click()")
                 logger.info('跳过成功')
             except JavascriptException as ex:
                 logger.warning("使用JS代码点击依然失败: %s", ex.msg)
