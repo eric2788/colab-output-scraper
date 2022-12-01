@@ -179,7 +179,7 @@ def login_google_acc(gmail: str, password: str) -> None:
         except TimeoutException:
             logger.info('找不到登入按钮，正在寻找目前登入用户资讯...')
             try:
-                profile = driver.find_element(By.XPATH, '//*[@class="gb_A gb_Ma gb_f"]').get_attribute('aria-label')
+                profile = driver.find_element(By.XPATH, "//a[starts-with(@href, 'https://accounts.google.com')]").get_attribute('aria-label')
                 logger.info('目前登入账户: %s', profile)
                 # logged in with correct account
                 if gmail in profile:
