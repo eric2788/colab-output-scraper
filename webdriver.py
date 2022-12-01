@@ -130,7 +130,7 @@ def escape_recaptcha(driver: Chrome):
         try:
             wait = WebDriverWait(driver, 10)
             checkmark = wait.until(expected_conditions.element_to_be_clickable((
-                        By.XPATH, "//div[@class='rc-anchor-center-container']"
+                        By.XPATH, "/html/body//div[@class='recaptcha-checkbox-checkmark']"
             )))
             driver.execute_script('arguments[0].click()', checkmark)
             logger.info('跳过成功')
@@ -141,11 +141,14 @@ def escape_recaptcha(driver: Chrome):
                 logger.warning('绕过验证码按钮无法点击: %s', e.msg)
             logger.warning('将尝试直接使用JS代码点击')
             try:
-                driver.execute_script("document.querySelector('div.rc-anchor-center-container').click()")
+                print(driver.execute_script('return document.body.innerHTML;'))
+                driver.execute_script("document.querySelector('div.recaptcha-checkbox-checkmark').click()")
                 logger.info('跳过成功')
             except JavascriptException as ex:
                 logger.warning("使用JS代码点击依然失败: %s", ex.msg)
         finally:
+            driver.save_screenshot('reCaptcha_frame.png')
             driver.switch_to.default_content()
+            driver.save_screenshot('reCaptcha_window.png')
     except TimeoutException:
         pass
