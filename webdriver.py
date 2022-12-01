@@ -15,7 +15,7 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.wait import WebDriverWait
 
-from constrants import COOKIE_PATH, DISABLE_DEV_SHM
+from constrants import COOKIE_PATH, DISABLE_DEV_SHM, DISABLE_WEB_SECURITY
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,8 @@ def init_driver(version:int = 107) -> Chrome:
     #options.add_argument("--start-maximized")
     #options.add_argument(
     #    '--user-agent="Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 640 XL LTE) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Mobile Safari/537.36 Edge/12.10166"')
+    if DISABLE_WEB_SECURITY:
+        options.add_argument("--disable-web-security")
 
     driver_path = None
 
@@ -130,7 +132,7 @@ def escape_recaptcha(driver: Chrome):
         try:
             wait = WebDriverWait(driver, 10)
             checkmark = wait.until(expected_conditions.element_to_be_clickable((
-                        By.XPATH, "//div[@class='rc-anchor-center-container']"
+                        By.XPATH, "/html/body//div[@class='recaptcha-checkbox-checkmark']"
             )))
             driver.execute_script('arguments[0].click()', checkmark)
             logger.info('跳过成功')
@@ -141,11 +143,16 @@ def escape_recaptcha(driver: Chrome):
                 logger.warning('绕过验证码按钮无法点击: %s', e.msg)
             logger.warning('将尝试直接使用JS代码点击')
             try:
-                driver.execute_script("document.querySelector('div.rc-anchor-center-container').click()")
+                print(driver.execute_script('return document.body.innerHTML;'))
+                # test only
+                driver.execute_script("try { document.querySelector('div.recaptcha-checkbox-checkmark').click() } catch(e){ }")
+                driver.execute_script("document.querySelector('iframe[title=reCAPTCHA]').contentWindow.document.querySelector('div.recaptcha-checkbox-checkmark').click()")
                 logger.info('跳过成功')
             except JavascriptException as ex:
                 logger.warning("使用JS代码点击依然失败: %s", ex.msg)
         finally:
+            driver.save_screenshot('reCaptcha_frame.png')
             driver.switch_to.default_content()
+            driver.save_screenshot('reCaptcha_window.png')
     except TimeoutException:
         pass

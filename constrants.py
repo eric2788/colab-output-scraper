@@ -10,6 +10,7 @@ NOTEBOOK_URL = f'https://colab.research.google.com/drive/{os.getenv("NOTEBOOK_ID
 
 EMAIL = os.getenv('GMAIL')
 PASSWORD = os.getenv('GMAIL_PASSWORD')
+DISABLE_WEB_SECURITY = os.getenv('DISABLE_WEB_SECURITY', 'false') == 'true'
 
 DISABLE_DEV_SHM = os.getenv('DISABLE_DEV_SHM', 'false').lower() == 'true'
 
